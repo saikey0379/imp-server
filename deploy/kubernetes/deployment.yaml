@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imp-server
+  namespace: default
+spec:
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: imp-server
+  template:
+    metadata:
+      labels:
+        app: imp-server
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: imp-deploy
+                    operator: In
+                    values:
+                      - true
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - imp-server
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: imp-server
+          image: docker.example.com/imp-server:v0.0.1
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8083
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8083
+          volumeMounts:
+            - name: dir-tftp
+              mountPath: /imp/pxelinux.cfg/
+            - name: config-imp-server
+              mountPath: /imp/conf/imp-server.conf
+      volumes:
+        - name: "dir-tftp"
+          hostPath:
+            path: "/var/lib/tftpboot/pxelinux.cfg/"
+        - name: "config-imp-server"
+          configMap:
+            name: config-imp-server
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-imp-server
+  namespace: default
+data:
+  imp-server.conf: |-
+    [Server]
+    listen = "0.0.0.0"
+    port = 8083
+    redisAddr = "127.0.0.1"
+    redisPort = 6379
+    redisPasswd = "password"
+    redisDBNumber = 1 
+    
+    [Pxe]
+    pxeConfigDir = "/imp/pxelinux.cfg"
+    
+    [Repo]
+    connection = "root:imp@tcp(127.0.0.1:3306)/imp?charset=utf8&parseTime=True&loc=Local"
+    
+    [Logger]
+    logFile = "/var/log/imp-server.log"
+    level = "debug"

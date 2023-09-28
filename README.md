@@ -1,130 +1,215 @@
 ## 依赖
 - MySQL（5.6+）
-- Git
-- Go1.11及以上版本
-- gbb
+- Go1.21及以上版本
+- Docker / Kubernetes (可选)
 
 ## 安装
-### 拉取源代码
-
-``` shell
-$ cd $YOUR_WORK_SPACE && git clone https://github.com/idcos/osinstall-server.git
-```
-
-### *nix下安装编译环境
+### Linux下安装编译环境
 1. 登录[golang官网](https://golang.org/dl/)或者[golang中国官方镜像](https://golang.google.cn/dl/)下载最新的稳定版本的go安装包并安装。
 
-	```
-	$ wget https://dl.google.com/go/go1.12.linux-amd64.tar.gz
+	```bash
+	$ wget https://go.dev/dl/go1.21.1.linux-amd64.tar.gz
 	# 解压缩后go被安装在/usr/local/go
-	$ sudo tar -xzv -f ./go1.12.linux-amd64.tar.gz -C /usr/local/
+	$ sudo tar -xzvf ./go1.21.1.linux-amd64.tar.gz -C /usr/local/
 	```
 
-1. 配置go环境变量
+2. 配置go环境变量
 
-	``` shell
-	$ vi ~/.bashrc
+	```bash
+	$ cat << "EOF" >> ~/.bashrc
 	export GOROOT=/usr/local/go
-	export GOPATH=$GOPATH:$YOUR_WORK_SPACE/osinstall-server
 	export PATH=$PATH:$GOROOT/bin
-    $ source ~/.bashrc
+	EOF
+	$ source ~/.bashrc
 	```
+ 
+### 源代码编译
+1. 源码下载与编译
 
-1. 安装[gbb](https://github.com/voidint/gbb)
-
-	``` shell
-	$ go get -u -v github.com/voidint/gbb
+	```bash
+	$ git clone https://github.com/saikey0379/imp-server.git
+	
+	$ cd /imp-server
+	$ go build -o ./bin/imp-server ./cmd/main.go
 	```
+ 
+	```bash
+	$ ls -l bin
+	total 133848
+	-rwxr-xr-x  1 root  root    16M  3  1 10:36 imp-server
+	```
+2. 安装
 
-如果以上工具都安装完毕，并且`$GOROOT/bin`和`$GOPATH/bin`都已经加入到`$PATH`环境变量下，那么执行操作后是否有类似输出👇
+	```bash
+	$ IMP_INSTALL_DIR=/usr/local/imp/
+	$ install -p -m 0755 bin/imp-server ${IMP_INSTALL_DIR}/bin/
+	$ install -p -m 0644 conf/imp-server.conf ${IMP_INSTALL_DIR}/conf/
 
-```
-$ gbb version
-gbb version 0.6.0
-date: 2019-02-13T14:26:13+08:00
-branch: master
-commit: 1443991e7627e077dbf1c5ab86b3a2dff0216eb5
-```
+	$ /usr/local/imp/bin/imp-server -v
+	imp-server version 0.0.1
+	```
+3. RPMbuild(可选)
 
-### 编译
-进入源代码根目录后执行`gbb --debug`
-
-``` shell
-$ cd $YOUR_WORK_SPACE/osinstall-server && gbb --debug
-```
-编译完毕后，项目根目录`osinstall-server`下多了`bin`和`pkg`两个目录，其中`bin`目录下包含了多个可执行文件。
-
-``` shell
-$ ls -l bin
-total 133848
--rwxr-xr-x  1 voidint  staff    10M  3  1 10:36 cloudboot-agent
--rwxr-xr-x  1 voidint  staff    10M  3  1 10:36 cloudboot-encrypt-generator
--rwxr-xr-x  1 voidint  staff   7.9M  3  1 10:36 cloudboot-initdb
--rwxr-xr-x  1 voidint  staff    16M  3  1 10:36 cloudboot-server
--rwxr-xr-x  1 voidint  staff    11M  3  1 10:36 pe-agent
--rwxr-xr-x  1 voidint  staff    11M  3  1 10:36 win-agent
-```
-
-查看编译得到的可执行文件的版本信息，可以看到编译的时间戳信息-`date`和源代码的版本信息-`commit`都已经烙印在了这个二进制可执行文件的版本信息中。这类信息对于`追溯`有重要作用。
-
-``` shell
-$ ./bin/cloudboot-server -v
-cloudboot-server version 1.5.0
-date: 2019-03-01T10:36:39+08:00
-branch: master
-commit: 3483d3a0a659510ba3fa63c440a92513c7aa2348
-```
-
-详情，请移步[gbb](https://github.com/voidint/gbb)。
+	```bash
+	$ yum -y install rpmbuild
+	
+	$ VERSION=v0.0.1
+	$ tar -zcvf /root/rpmbuild/SOURCES/imp-server-${VERSION}.tgz bin/ conf/ deploy/systemd/
+	$ sed "s/VERSION/${VERSION}/g" deploy/rpmbuild/imp-server.spec > imp-server_${VERSION}.spec
+	$ rpmbuild -bb imp-server_${VERSION}.spec
+	$ mv /root/rpmbuild/RPMS/x86_64/imp-server-${VERSION}-0.x86_64.rpm .
+	```
 
 ### 初始化数据
 1. 导入SQL文件初始化数据库
-将`$osinstall_server/doc/db/cloudboot.sql`导入MySQL。
+将`./doc/db/imp-server.sql`导入MySQL。
 
-1. 配置文件`/etc/cloudboot-server/cloudboot-server.conf`
+2. 配置文件修改`/usr/local/imp/conf/imp-server.conf`
 
-``` JSON
-{
-    "repo": {
-        "connection": "root:mypassword@tcp(localhost:3306)/cloudboot?charset=utf8&parseTime=True&loc=Local"
-    },
-    "osInstall": {
-        "httpPort": 8081,
-        "pxeConfigDir": "/etc/osinstall-server/pxelinux.cfg"
-    },
-    "logger": {
-        "logFile": "~/logs/osinstall.log",
-        "level": "debug"
-    },
-    "vm": {
-        "storage": "guest_images_lvm"
-    },
-    "rsa": {
-        "publicKey": "/etc/cloudboot-server/rsa/public.pem",
-        "privateKey": "/etc/cloudboot-server/rsa/private.pem"
-    },
-    "cron": {
-        "installTimeout": 3600
-    },
-    "activeMQ": {
-        "server": "activemq.dev.idcos.net:61614"
-    },
-    "device": {
-        "maxBatchOperateNum": 5,
-        "maxOperateNumIn5Minutes": 5
-    }
-}
-```
+	```ini
+	[Server]
+	listen = "0.0.0.0"
+	port = 8083
+	redisAddr = "127.0.0.1"
+	redisPort = 6379
+	redisPasswd = "password"
+	redisDBNumber = 1
 
-## 运行
+	[Pxe]
+	pxeConfigDir = "/var/lib/tftpboot/pxelinux.cfg"
 
-``` shell
-$ cd $YOUR_WORK_SPACE/osinstall_server && ./bin/cloudboot-server -c /etc/cloudboot-server/cloudboot-server.conf
-```
+	[Repo]
+	connection = "root:imp@tcp(127.0.0.1:3306)/imp?charset=utf8&parseTime=True&loc=Local"
 
+	[Logger]
+	logFile = "/var/log/imp-server.log"
+	level = "debug"
+	```
 
+## 启动
+### 裸机启动(可选)
+##### 推荐systemd启动
+1. 服务启动
+	```bash
+	$ /usr/local/imp/bin/imp-server -c /usr/local/imp/conf/imp-server.conf
+	```
+2. Systemd启动
+   ##### 通过rpm包安装可以跳过此步
+	```bash
+	$ install -p -m 0755 deploy/systemd/imp-server.service /lib/systemd/system/imp-server.service
+ 	```
+   ##### 启动
+	```bash
+	$ systemctl enable imp-server && systemctl start imp-server
+	```
+### 容器启动(可选)
+1. 镜像构建
+	```bash
+	$ docker build -t docker.example.com/imp-server:v0.0.1 -f Dockerfile .
+	```
+2. 容器启动
+	```bash
+	# 容器环境配置文件调整可能较为频繁，建议挂载外部配置
+	$ install -p -m 0644 conf/imp-server.conf /usr/local/imp/conf/
 
-## 版权
+	$ docker run -d -v /var/lib/tftpboot/pxelinux.cfg/:/var/lib/tftpboot/pxelinux.cfg/ -v /usr/local/imp/conf/imp-server.conf:/usr/local/imp/conf/imp-server.conf imp-server:v0.0.1 --name imp-server
+ 	```
+### Kubernetes启动(可选)
+##### 镜像构建【同上】
+1. 启动
+	```bash
+	$ kubectl apply -f doc/kubernetes/
+	$ kubectl get all
+ 	```
+   
+## 附.基础服务安装参考
+### HTTP安装
+1. 安装
+	```bash
+	$ rpm -Uvh http://nginx.org/packages/centos/7/noarch/RPMS/nginx-release-centos-7-0.el7.ngx.noarch.rpm
+	$ yum -y install nginx
+	```
+2. 配置
+	```bash
+	$ cat << "EOF" > /etc/nginx/conf.d/imp-server.conf 
+	server {
+		listen 80;
+		server_name imp.example.com;
+ 		# imp-server服务api
+		location /api/ {
+			proxy_pass http://127.0.0.1:8083;
+		}
+ 
+		# 存放os镜像以及安装包
+    	location /www {
+			root   /data/nginx/;
+			autoindex on;
+			autoindex_exact_size off;
+			autoindex_localtime on;
+    	}
+	}
+	EOF
+	$ systemctl enable nginx && systemctl start nginx
+	```
+### DNS安装
+##### 如已存在DNS服务器则跳过第一步
 
-Copyright 2019 Cloud J Tech, Inc and other contributors
-Licensed under the GPLv3
+1. 安装Dnsmasq
+	```bash
+	$ yum -y install dnsmasq
+	$ systemctl enable dnsmasqd && systemctl start dnsmasqd
+	```
+ 2. 获取服务访问地址，并配置DNS服务器
+	```bash
+	$ IPADDR=$(ifconfig $(route -n | grep ^0.0.0.0 | awk '{print$NF}') | grep netmask | head -n 1 | awk '{print$2}')
+	$ cat << EOF > /etc/dnsmasqd.conf
+	address=/imp.example.com/${IPADDR}
+	EOF
+	$ systemctl restart dnsmasqd
+	```
+### DHCP安装
+1. 安装配置
+	```bash
+	# 替换成真实的地址
+	$ SERVER_DNS=192.168.0.1
+	$ SERVER_TFTP=$(ifconfig $(route -n | grep ^0.0.0.0 | awk '{print$NF}') | grep netmask | head -n 1 | awk '{print$2}')
+
+	$ yum -y install dhcp
+	$ cat << EOF > /etc/dhcp/dhcpd.conf
+	allow booting;
+	allow bootp;
+	ddns-update-style none;
+	ping-check true;
+	ping-timeout 3;
+	default-lease-time 120;
+	max-lease-time 600;
+	authoritative;
+	filename "undionly.kkpxe";
+	next-server ${SERVER_TFTP};
+	option domain-name-servers ${SERVER_DNS};
+ 
+	subnet 192.168.0.0 netmask 255.255.255.0 {
+        range 192.168.0.2 192.168.0.254;
+	}
+	EOF
+	$ systemctl enable dhcpd && systemctl start dhcpd
+	```
+### TFTP安装
+1. 安装配置
+
+	```bash
+	$ yum -y install tftp-server
+
+	# service tftp
+	$ sed -i "/disable/ s/yes/no/g" /etc/xinetd.d/tftp
+ 
+	$ cat << "EOF" > /var/lib/tftpboot/pxelinux.cfg/default 
+	DEFAULT IMPOS
+	LABEL IMPOS
+	KERNEL http://imp.example.com/www/os/centos/7.9/images/pxeboot/vmlinuz
+	APPEND initrd=http://imp.example.com/www/os/IMPOS.img
+	IPAPPEND 2
+	EOF
+ 
+	$ systemctl enable tftp && systemctl start tftp
+	```

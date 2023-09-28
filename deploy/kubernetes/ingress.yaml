@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: imp-server
+  namespace: default
+spec:
+  rules:
+    - host: imp.example.com # change to your domain
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: imp-server
+              servicePort: 8083

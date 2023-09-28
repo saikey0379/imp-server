@@ -29,11 +29,6 @@ _testmain.go
 *.exe
 .DS_Store
 
-# Front
-node_modules/
-idcshell-ui/
-
-
 # vim
 *.sw[op]
 .cache/
